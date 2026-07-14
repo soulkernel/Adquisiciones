@@ -1,0 +1,23 @@
+# Temporales locales
+.server.pid
+*.log
+*.tmp
+*.bak
+
+# Dependencias si en el futuro se agrega build tooling
+node_modules/
+dist/
+build/
+.env
+.env.*
+
+# Archivos del sistema/editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+# No subir credenciales ni secretos
+*secret*
+*credentials*
+*.pem
+*.key

@@ -12,6 +12,9 @@ Este prototipo demuestra cómo podría funcionar una solución básica para gest
 - Checklist documental basado en el índice del Excel.
 - Seguimientos por IDD, contratación directa, no objeción y garantías.
 - Calendario de vencimientos y próximos eventos.
+- Semáforo inteligente de riesgo por expediente.
+- Bitácora local de cambios por expediente.
+- Estructura automática sugerida para expediente digital.
 - Reportes PDF.
 - Exportaciones Excel.
 - Preparación para Google Drive API.
@@ -119,6 +122,12 @@ El prototipo permite actualizar datos desde la pantalla `Expediente`, sección `
 Los cambios se guardan localmente en el navegador y se incluyen al usar `Descargar Excel actualizado`.
 
 Para alimentar un Google Sheet real en línea se requiere una integración adicional con Google OAuth, Google Sheets API o Apps Script.
+
+## Innovaciones incorporadas
+
+- `Semáforo inteligente de riesgo`: calcula riesgo bajo, medio, alto o crítico usando monto, nivel, IDD, documentos, vencimientos, garantías y no objeción.
+- `Bitácora de cambios`: registra creación, edición, carga de archivos y generación de estructura digital por expediente.
+- `Expediente digital automático`: propone y registra carpetas estándar para Drive o carpeta local sincronizada.
 
 ## Logotipo e identidad GLF
 

@@ -15,7 +15,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="styles.css?v=20260714-1" />
+    <link rel="stylesheet" href="styles.css?v=20260714-2" />
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
@@ -90,6 +90,16 @@
 
         <section id="dashboardView" class="view active">
           <div class="kpi-grid" id="kpiGrid"></div>
+          <article class="panel">
+            <div class="panel-header wrap">
+              <div>
+                <h2>Semáforo inteligente de riesgo</h2>
+                <p>Priorización automática por documentos, plazos, IDD, modalidad, monto y garantías.</p>
+              </div>
+              <span id="criticalRiskCount" class="pill danger">0 críticos</span>
+            </div>
+            <div id="riskDashboardList" class="stack-list"></div>
+          </article>
           <div class="content-grid">
             <article class="panel wide">
               <div class="panel-header">
@@ -176,6 +186,28 @@
               <div id="guaranteesPanel" class="stack-list"></div>
             </article>
           </div>
+          <div class="content-grid">
+            <article class="panel">
+              <div class="panel-header wrap">
+                <div>
+                  <h2>Riesgo inteligente del expediente</h2>
+                  <p>Diagnóstico automático con acciones recomendadas.</p>
+                </div>
+                <span id="currentRiskBadge" class="pill">N/D</span>
+              </div>
+              <div id="currentRiskCard" class="risk-card"></div>
+            </article>
+            <article class="panel">
+              <div class="panel-header wrap">
+                <div>
+                  <h2>Expediente digital automático</h2>
+                  <p>Estructura sugerida para Drive o carpeta local sincronizada.</p>
+                </div>
+                <button id="generateFolderStructureBtn" class="secondary-button">Generar estructura</button>
+              </div>
+              <div id="folderStructureList" class="folder-tree"></div>
+            </article>
+          </div>
           <article class="panel">
             <div class="panel-header wrap">
               <div>
@@ -201,6 +233,16 @@
                 <button class="primary-button">Guardar cambios</button>
               </div>
             </form>
+          </article>
+          <article class="panel">
+            <div class="panel-header wrap">
+              <div>
+                <h2>Bitácora de cambios</h2>
+                <p>Trazabilidad local de actualizaciones, creación de expedientes, archivos y estructura digital.</p>
+              </div>
+              <span id="changeLogCount" class="pill">0 eventos</span>
+            </div>
+            <div id="changeLogList" class="timeline-list"></div>
           </article>
         </section>
 
@@ -419,8 +461,8 @@
       </form>
     </dialog>
 
-    <script src="login-boot.js?v=20260714-1"></script>
-    <script src="data/seed-data.js?v=20260714-1"></script>
-    <script src="app.js?v=20260714-1"></script>
+    <script src="login-boot.js?v=20260714-2"></script>
+    <script src="data/seed-data.js?v=20260714-2"></script>
+    <script src="app.js?v=20260714-2"></script>
   </body>
 </html>

@@ -507,6 +507,92 @@ tr:hover td {
   color: var(--muted);
 }
 
+.risk-row.danger {
+  border-left: 5px solid var(--danger);
+}
+
+.risk-row.warning {
+  border-left: 5px solid var(--warning);
+}
+
+.risk-row.ok {
+  border-left: 5px solid var(--ok);
+}
+
+.risk-card {
+  display: grid;
+  gap: 1rem;
+}
+
+.risk-score {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-radius: 18px;
+  padding: 1rem;
+  font-size: 1.1rem;
+}
+
+.risk-score.danger {
+  color: var(--danger);
+  background: #fee4e2;
+}
+
+.risk-score.warning {
+  color: var(--warning);
+  background: #fff3d6;
+}
+
+.risk-score.info {
+  color: var(--blue);
+  background: #e6f1fa;
+}
+
+.risk-score.ok {
+  color: var(--ok);
+  background: #ddf8e8;
+}
+
+.folder-tree {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.folder-root,
+.folder-item,
+.timeline-item {
+  border: 1px solid rgba(216, 226, 234, 0.9);
+  border-radius: 16px;
+  padding: 0.75rem 0.85rem;
+  background: #fbfdff;
+}
+
+.folder-root {
+  color: var(--blue);
+  font-weight: 900;
+}
+
+.folder-item {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-left: 0.8rem;
+}
+
+.timeline-list {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.timeline-item {
+  border-left: 5px solid var(--cyan);
+}
+
+.timeline-item p {
+  margin: 0.35rem 0 0;
+  color: var(--ink);
+}
+
 .check-item {
   grid-template-columns: auto 1fr auto;
   align-items: center;

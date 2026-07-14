@@ -39,6 +39,8 @@ function loadState() {
       ...saved,
       fileLog: Array.isArray(saved.fileLog) ? saved.fileLog : [],
       driveFolders: Array.isArray(saved.driveFolders) ? saved.driveFolders : [],
+      digitalFolders: Array.isArray(saved.digitalFolders) ? saved.digitalFolders : [],
+      changeLog: Array.isArray(saved.changeLog) ? saved.changeLog : [],
       googleClientId: saved.googleClientId || storage.getItem("glf_google_client_id") || "",
       alertsEmail: saved.alertsEmail || storage.getItem("glf_alerts_email") || "",
     };
@@ -57,6 +59,8 @@ function loadState() {
     catalogs: seed.catalogs || {},
     fileLog: [],
     driveFolders: [],
+    digitalFolders: [],
+    changeLog: [],
     googleClientId: storage.getItem("glf_google_client_id") || "",
     alertsEmail: storage.getItem("glf_alerts_email") || "",
   };
@@ -101,6 +105,7 @@ function init() {
   setupReports();
   setupManual();
   setupEmailAlerts();
+  setupDigitalFolderTools();
   hydrateSelectors();
   if (hasActiveSession()) {
     openAuthenticatedApp();
@@ -186,12 +191,13 @@ function refreshSession() {
 }
 
 function setupNavigation() {
-  document.querySelectorAll(".nav-link").forEach((button) => {
+  document.querySelectorAll(".nav-link[data-view]").forEach((button) => {
     button.addEventListener("click", () => showView(button.dataset.view));
   });
 }
 
 function showView(view) {
+  if (!view || !$(`${view}View`)) return;
   currentView = view;
   document.querySelectorAll(".nav-link").forEach((b) => b.classList.toggle("active", b.dataset.view === view));
   document.querySelectorAll(".view").forEach((v) => v.classList.remove("active"));
@@ -264,6 +270,10 @@ function setupEditContract() {
     populateEditContractForm();
     $("editContractForm").scrollIntoView({ behavior: "smooth", block: "start" });
   });
+}
+
+function setupDigitalFolderTools() {
+  $("generateFolderStructureBtn").addEventListener("click", generateDigitalFolderStructure);
 }
 
 function setupDriveTools() {
@@ -347,6 +357,7 @@ function renderDashboard() {
     ]),
   );
   renderDueAlerts();
+  renderRiskDashboard();
 }
 
 function kpi(label, value, note) {
@@ -418,6 +429,9 @@ function renderExpediente() {
   renderChecklist(contract);
   renderIdd(contract);
   renderGuarantees(contract);
+  renderCurrentRisk(contract);
+  renderFolderStructure(contract);
+  renderChangeLog(contract);
   populateEditContractForm();
 }
 
@@ -442,6 +456,13 @@ function saveEditedContract(event) {
   event.preventDefault();
   const contract = getCurrentContract();
   if (!contract) return;
+  const before = {
+    provider: contract["PROVEEDOR / CONTRATISTA"] || "",
+    amount: Number(contract["MONTO USD"] || 0),
+    status: contract["ESTADO"] || "",
+    due: contract["F.VENCIM."] || "",
+    idd: contract["IDD APROBADO"] || "",
+  };
   const form = event.target;
   const amount = Number(form.elements.amount.value || 0);
   if (!Number.isFinite(amount) || amount < 0) {
@@ -460,6 +481,13 @@ function saveEditedContract(event) {
   contract["NIVEL / RUTA"] = form.elements.level.value || calculateLevel(amount);
   contract["OBSERVACIONES LEGALES"] = form.elements.legalNotes.value.trim();
   contract["ACTUALIZADO EN APP"] = new Date().toISOString();
+  const changes = [];
+  if (before.provider !== contract["PROVEEDOR / CONTRATISTA"]) changes.push("proveedor");
+  if (before.amount !== contract["MONTO USD"]) changes.push("monto");
+  if (before.status !== contract["ESTADO"]) changes.push("estado");
+  if (before.due !== contract["F.VENCIM."]) changes.push("fecha de vencimiento");
+  if (before.idd !== contract["IDD APROBADO"]) changes.push("IDD");
+  logChange(contract["CÓDIGO EXPEDIENTE"], "Datos del expediente actualizados", changes.length ? `Campos modificados: ${changes.join(", ")}.` : "Formulario guardado sin cambios relevantes.");
   saveState();
   renderAll();
   alert("Cambios guardados. El Excel actualizado incluirá esta información.");
@@ -581,6 +609,218 @@ function prepareDueAlertsEmail() {
   window.location.href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 
+function renderRiskDashboard() {
+  const risks = buildRiskRows();
+  const critical = risks.filter((x) => x.level === "Crítico").length;
+  $("criticalRiskCount").textContent = `${critical} crítico${critical === 1 ? "" : "s"}`;
+  $("riskDashboardList").innerHTML = risks.length
+    ? risks
+        .slice(0, 8)
+        .map(
+          (risk) =>
+            `<div class="list-item risk-row ${risk.className}"><strong>${escapeHtml(risk.level)} · ${escapeHtml(risk.code)}</strong><small>${escapeHtml(risk.summary)} · Puntaje ${risk.score}</small></div>`,
+        )
+        .join("")
+    : emptyState("No hay riesgos identificados.");
+}
+
+function buildRiskRows() {
+  return state.contracts
+    .map((contract) => buildRiskAssessment(contract))
+    .sort((a, b) => b.score - a.score);
+}
+
+function buildRiskAssessment(contract) {
+  const factors = [];
+  let score = 0;
+  const code = contract["CÓDIGO EXPEDIENTE"];
+  const level = contract["NIVEL / RUTA"];
+  const amount = Number(contract["MONTO USD"] || 0);
+  const due = parseDate(contract["F.VENCIM."]);
+  const idx = findIndexRow(code);
+  const docs = state.documentCatalog.length ? state.documentCatalog : defaultDocs();
+  const completed = docs.filter((doc) => isDocComplete(idx, doc)).length;
+  const completionRatio = docs.length ? completed / docs.length : 0;
+  const iddPending = String(contract["IDD APROBADO"] || "").includes("Pendiente");
+  const boardPending = String(contract["NO OBJECIÓN JUNTA"] || "").includes("Pendiente");
+  const guaranteeRisk = state.guarantees.some((x) => (x["CÓDIGO EXPEDIENTE"] === code || x["INST."] === contract["INST."]) && String(x["SEMÁFORO"] || "").includes("🔴"));
+  const hasUploadedInfo = state.fileLog.some((file) => file.target === code);
+
+  if (level === "DIR") {
+    score += 20;
+    factors.push("Contratación directa requiere justificación reforzada");
+  }
+  if (level === "N4" || amount > 100000) {
+    score += 18;
+    factors.push("Monto alto o nivel N4 requiere mayor control documental");
+  }
+  if (completionRatio < 0.5) {
+    score += 25;
+    factors.push("Expediente documental incompleto");
+  } else if (completionRatio < 0.8) {
+    score += 12;
+    factors.push("Expediente con documentos pendientes");
+  }
+  if (iddPending) {
+    score += 18;
+    factors.push("IDD pendiente");
+  }
+  if (boardPending) {
+    score += 14;
+    factors.push("No objeción de Junta pendiente");
+  }
+  if (guaranteeRisk) {
+    score += 16;
+    factors.push("Garantía vencida o crítica");
+  }
+  if (due) {
+    const days = daysBetween(new Date(), due);
+    if (days < 0 && !hasUploadedInfo) {
+      score += 30;
+      factors.push("Plazo vencido sin archivos registrados");
+    } else if (days >= 0 && days <= 7) {
+      score += 20;
+      factors.push("Plazo vence en 7 días o menos");
+    } else if (days <= 30) {
+      score += 8;
+      factors.push("Plazo próximo a vencer");
+    }
+  }
+
+  const levelName = score >= 70 ? "Crítico" : score >= 45 ? "Alto" : score >= 25 ? "Medio" : "Bajo";
+  const className = score >= 70 ? "danger" : score >= 45 ? "warning" : score >= 25 ? "info" : "ok";
+  return {
+    code,
+    institution: contract["INST."],
+    provider: contract["PROVEEDOR / CONTRATISTA"] || "Por definir",
+    amount,
+    level: levelName,
+    className,
+    score,
+    completedDocs: completed,
+    totalDocs: docs.length,
+    summary: factors.length ? factors.slice(0, 3).join("; ") : "Sin factores críticos identificados",
+    recommendation: buildRiskRecommendation(levelName, factors),
+    factors,
+  };
+}
+
+function buildRiskRecommendation(level, factors) {
+  if (level === "Crítico") return "Atención inmediata: regularizar documentación, responsable y evidencia antes de continuar.";
+  if (level === "Alto") return "Priorizar revisión esta semana y asignar responsable de cierre.";
+  if (level === "Medio") return "Dar seguimiento preventivo y actualizar evidencia pendiente.";
+  return factors.length ? "Mantener seguimiento regular." : "Sin acción urgente.";
+}
+
+function renderCurrentRisk(contract) {
+  const risk = buildRiskAssessment(contract);
+  $("currentRiskBadge").textContent = `${risk.level} · ${risk.score}`;
+  $("currentRiskBadge").className = `pill ${risk.className}`;
+  $("currentRiskCard").innerHTML = `
+    <div class="risk-score ${risk.className}">
+      <strong>${escapeHtml(risk.level)}</strong>
+      <span>${risk.score}/100</span>
+    </div>
+    <p>${escapeHtml(risk.recommendation)}</p>
+    <div class="stack-list">
+      ${
+        risk.factors.length
+          ? risk.factors.map((factor) => `<div class="list-item"><strong>${escapeHtml(factor)}</strong><small>Factor automático de riesgo</small></div>`).join("")
+          : emptyState("No hay factores críticos identificados.")
+      }
+    </div>`;
+}
+
+function logChange(code, action, detail) {
+  state.changeLog = Array.isArray(state.changeLog) ? state.changeLog : [];
+  state.changeLog.unshift({
+    id: `log-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    code,
+    action,
+    detail,
+    user: "ADMIN",
+    at: new Date().toISOString(),
+  });
+  state.changeLog = state.changeLog.slice(0, 500);
+}
+
+function renderChangeLog(contract) {
+  const code = contract["CÓDIGO EXPEDIENTE"];
+  const entries = (state.changeLog || []).filter((entry) => entry.code === code).slice(0, 12);
+  $("changeLogCount").textContent = `${entries.length} evento${entries.length === 1 ? "" : "s"}`;
+  $("changeLogList").innerHTML = entries.length
+    ? entries
+        .map(
+          (entry) =>
+            `<div class="timeline-item"><strong>${escapeHtml(entry.action)}</strong><small>${escapeHtml(new Date(entry.at).toLocaleString("es-EC"))} · ${escapeHtml(entry.user)}</small><p>${escapeHtml(entry.detail)}</p></div>`,
+        )
+        .join("")
+    : emptyState("Aún no hay eventos registrados para este expediente.");
+}
+
+function buildFolderPlan(code) {
+  return [
+    `${code}/01_Precontractual`,
+    `${code}/02_IDD_Debida_Diligencia`,
+    `${code}/03_Contrato`,
+    `${code}/04_Garantias`,
+    `${code}/05_Entregables`,
+    `${code}/06_Pagos`,
+    `${code}/07_Cierre`,
+    `${code}/08_Comunicaciones`,
+  ];
+}
+
+function getFolderRecord(code) {
+  state.digitalFolders = Array.isArray(state.digitalFolders) ? state.digitalFolders : [];
+  return state.digitalFolders.find((item) => item.code === code);
+}
+
+function renderFolderStructure(contract) {
+  const code = contract["CÓDIGO EXPEDIENTE"];
+  const record = getFolderRecord(code);
+  const folders = record?.folders || buildFolderPlan(code);
+  $("folderStructureList").innerHTML = `
+    <div class="folder-root">${escapeHtml(code)}</div>
+    ${folders
+      .map((folder) => {
+        const label = folder.replace(`${code}/`, "");
+        return `<div class="folder-item"><span>📁</span><strong>${escapeHtml(label)}</strong></div>`;
+      })
+      .join("")}
+    <small>${record ? `Generada: ${escapeHtml(new Date(record.createdAt).toLocaleString("es-EC"))} · ${escapeHtml(record.mode)}` : "Estructura sugerida, pendiente de generar."}</small>`;
+}
+
+async function generateDigitalFolderStructure() {
+  const contract = getCurrentContract();
+  if (!contract) return;
+  const code = contract["CÓDIGO EXPEDIENTE"];
+  const folders = buildFolderPlan(code);
+  let mode = "Registrada en el prototipo";
+  if (localDirectoryHandle) {
+    try {
+      const root = await localDirectoryHandle.getDirectoryHandle(sanitizeFileName(code), { create: true });
+      for (const folder of folders) {
+        const leaf = folder.replace(`${code}/`, "");
+        await root.getDirectoryHandle(sanitizeFileName(leaf), { create: true });
+      }
+      mode = "Creada en carpeta local sincronizada";
+    } catch (error) {
+      alert(`No se pudo crear toda la estructura local: ${error.message}`);
+    }
+  }
+  state.digitalFolders = Array.isArray(state.digitalFolders) ? state.digitalFolders : [];
+  const existingIndex = state.digitalFolders.findIndex((item) => item.code === code);
+  const record = { code, folders, mode, createdAt: new Date().toISOString() };
+  if (existingIndex >= 0) state.digitalFolders[existingIndex] = record;
+  else state.digitalFolders.unshift(record);
+  logChange(code, "Estructura digital generada", `${folders.length} carpetas registradas. ${mode}.`);
+  saveState();
+  renderFolderStructure(contract);
+  renderChangeLog(contract);
+  alert("Estructura digital generada para el expediente.");
+}
+
 function renderCalendar() {
   const selectedMonth = parseMonthValue($("calendarMonth").value) || new Date();
   const typeFilter = $("calendarTypeFilter").value;
@@ -699,6 +939,7 @@ function createNewProcess(event) {
     createdInPilot: true,
   });
   currentContractId = code;
+  logChange(code, "Expediente creado", `Nuevo expediente ${level} por ${money(amount)}.`);
   saveState();
   hydrateSelectors();
   renderAll();
@@ -864,6 +1105,7 @@ async function saveFilesToLocalFolder() {
       await writable.write(file);
       await writable.close();
       state.fileLog.push({ name: safeName, target: contract["CÓDIGO EXPEDIENTE"], savedAt: new Date().toLocaleString("es-EC") });
+      logChange(contract["CÓDIGO EXPEDIENTE"], "Archivo copiado al expediente", `Archivo registrado: ${safeName}.`);
     }
     saveState();
     renderDrive();
@@ -955,8 +1197,11 @@ function downloadContractPdf() {
 function downloadUpdatedExcel() {
   const sheets = [
     { name: "Registro maestro", rows: state.contracts },
+    { name: "Riesgos inteligentes", rows: buildRiskRows().map((risk) => ({ ...risk, factors: risk.factors.join("; ") })) },
     { name: "Cumplimiento", rows: buildComplianceRows() },
     { name: "Avisos vencimiento", rows: buildDueAlerts() },
+    { name: "Bitacora", rows: state.changeLog || [] },
+    { name: "Estructura digital", rows: (state.digitalFolders || []).flatMap((record) => record.folders.map((folder) => ({ expediente: record.code, carpeta: folder, modo: record.mode, generado: record.createdAt }))) },
     { name: "Archivos registrados", rows: state.fileLog },
     { name: "Carpetas Drive", rows: state.driveFolders },
   ];

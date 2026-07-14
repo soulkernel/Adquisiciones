@@ -873,7 +873,21 @@ async function saveFilesToLocalFolder() {
 }
 
 function downloadPortfolioPdf() {
-  if (!window.jspdf?.jsPDF) return alert("La librería PDF no está cargada. Revisa conexión o abre con servidor local.");
+  if (!window.jspdf?.jsPDF) {
+    const alerts = buildAlerts().slice(0, 12);
+    return downloadSimplePdf("GLF_reporte_portafolio.pdf", "GLF - Reporte ejecutivo de adquisiciones", [
+      `Generado: ${new Date().toLocaleString("es-EC")}`,
+      `Contratos/procesos: ${state.contracts.length}`,
+      `Monto portafolio: ${money(state.contracts.reduce((sum, x) => sum + Number(x["MONTO USD"] || 0), 0))}`,
+      `Procesos DIR: ${state.contracts.filter((x) => x["NIVEL / RUTA"] === "DIR").length}`,
+      "",
+      "Acciones requeridas:",
+      ...alerts.map((x) => `- ${x.type}: ${x.title} (${x.detail || "Sin expediente"})`),
+      "",
+      "Procesos:",
+      ...state.contracts.slice(0, 30).map((c) => `${c["CÓDIGO EXPEDIENTE"]} | ${c["INST."]} | ${c["NIVEL / RUTA"]} | ${money(c["MONTO USD"])} | ${c["ESTADO"]}`),
+    ]);
+  }
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ orientation: "landscape" });
   doc.setFontSize(16);
@@ -899,7 +913,20 @@ function downloadPortfolioPdf() {
 
 function downloadContractPdf() {
   const c = getCurrentContract();
-  if (!window.jspdf?.jsPDF) return alert("La librería PDF no está cargada. Revisa conexión o abre con servidor local.");
+  if (!window.jspdf?.jsPDF) {
+    return downloadSimplePdf(`${sanitizeFileName(c["CÓDIGO EXPEDIENTE"])}.pdf`, "GLF - Ficha de expediente contractual", [
+      `Código: ${c["CÓDIGO EXPEDIENTE"]}`,
+      `Objeto: ${c["OBJETO DEL CONTRATO"] || ""}`,
+      `Institución: ${c["INST."]}`,
+      `Nivel: ${c["NIVEL / RUTA"]}`,
+      `Proveedor: ${c["PROVEEDOR / CONTRATISTA"] || "Por definir"}`,
+      `Monto: ${money(c["MONTO USD"])}`,
+      `Estado: ${c["ESTADO"]}`,
+      `IDD: ${c["IDD APROBADO"] || "Pendiente"}`,
+      `Causal DIR: ${c["CAUSAL DIR"] || "N/A"}`,
+      `No objeción Junta: ${c["NO OBJECIÓN JUNTA"] || "N/A"}`,
+    ]);
+  }
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF();
   doc.setFontSize(15);
@@ -926,22 +953,99 @@ function downloadContractPdf() {
 }
 
 function downloadUpdatedExcel() {
-  if (!window.XLSX) return alert("La librería Excel no está cargada. Revisa conexión o abre con servidor local.");
+  const sheets = [
+    { name: "Registro maestro", rows: state.contracts },
+    { name: "Cumplimiento", rows: buildComplianceRows() },
+    { name: "Avisos vencimiento", rows: buildDueAlerts() },
+    { name: "Archivos registrados", rows: state.fileLog },
+    { name: "Carpetas Drive", rows: state.driveFolders },
+  ];
+  if (!window.XLSX) {
+    return downloadExcelCompatibleHtml(`GLF_excel_actualizado_${dateKey(new Date())}.xls`, sheets);
+  }
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(state.contracts), "Registro maestro");
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildComplianceRows()), "Cumplimiento");
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(buildDueAlerts()), "Avisos vencimiento");
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(state.fileLog), "Archivos registrados");
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(state.driveFolders), "Carpetas Drive");
+  sheets.forEach((sheet) => XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(sheet.rows), sheet.name));
   XLSX.writeFile(wb, `GLF_excel_actualizado_${dateKey(new Date())}.xlsx`);
 }
 
 function downloadWorkbook(name, rows) {
-  if (!window.XLSX) return alert("La librería Excel no está cargada. Revisa conexión o abre con servidor local.");
+  if (!window.XLSX) {
+    return downloadExcelCompatibleHtml(`GLF_${name}.xls`, [{ name: "Datos", rows }]);
+  }
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.json_to_sheet(rows);
   XLSX.utils.book_append_sheet(wb, ws, "Datos");
   XLSX.writeFile(wb, `GLF_${name}.xlsx`);
+}
+
+function downloadExcelCompatibleHtml(filename, sheets) {
+  const sections = sheets
+    .map((sheet) => {
+      const rows = Array.isArray(sheet.rows) ? sheet.rows : [];
+      const headers = unique(rows.flatMap((row) => Object.keys(row || {})));
+      const table = rows.length
+        ? `<table border="1"><thead><tr>${headers.map((h) => `<th>${escapeHtml(h)}</th>`).join("")}</tr></thead><tbody>${rows
+            .map((row) => `<tr>${headers.map((h) => `<td>${escapeHtml(row?.[h] ?? "")}</td>`).join("")}</tr>`)
+            .join("")}</tbody></table>`
+        : "<p>Sin datos</p>";
+      return `<h2>${escapeHtml(sheet.name)}</h2>${table}`;
+    })
+    .join("<br/>");
+  const html = `<!doctype html><html><head><meta charset="utf-8" /></head><body>${sections}</body></html>`;
+  downloadBlob(filename, html, "application/vnd.ms-excel;charset=utf-8");
+}
+
+function downloadSimplePdf(filename, title, lines) {
+  const safeLines = [title, "", ...lines].flatMap((line) => wrapPdfLine(String(line ?? ""), 92));
+  const escaped = safeLines.map((line) => escapePdfText(line));
+  const streamLines = ["BT", "/F1 11 Tf", "50 790 Td", "14 TL", ...escaped.map((line) => `(${line}) Tj T*`), "ET"];
+  const stream = streamLines.join("\n");
+  const objects = [
+    "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj",
+    "2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj",
+    "3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj",
+    "4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj",
+    `5 0 obj << /Length ${stream.length} >> stream\n${stream}\nendstream endobj`,
+  ];
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  objects.forEach((object) => {
+    offsets.push(pdf.length);
+    pdf += `${object}\n`;
+  });
+  const xrefOffset = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  offsets.slice(1).forEach((offset) => {
+    pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
+  });
+  pdf += `trailer << /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  downloadBlob(filename, pdf, "application/pdf");
+}
+
+function wrapPdfLine(text, maxLength) {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  if (!normalized) return [""];
+  const lines = [];
+  for (let i = 0; i < normalized.length; i += maxLength) {
+    lines.push(normalized.slice(i, i + maxLength));
+  }
+  return lines;
+}
+
+function escapePdfText(value) {
+  return String(value).replace(/[^\x20-\x7EÁÉÍÓÚáéíóúÑñüÜ]/g, " ").replaceAll("\\", "\\\\").replaceAll("(", "\\(").replaceAll(")", "\\)");
+}
+
+function downloadBlob(filename, content, type) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 function tableHtml(headers, rows) {

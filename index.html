@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GLF | Sistema Prototipo de Adquisiciones</title>
+    <meta
+      name="description"
+      content="Sistema prototipo de adquisiciones GLF."
+    />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' https://accounts.google.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://www.googleapis.com https://accounts.google.com; frame-src https://accounts.google.com; object-src 'none'; base-uri 'self';"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700;900&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css?v=20260713-9" />
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  </head>
+  <body>
+    <div id="loginScreen" class="login-screen">
+      <section class="login-card">
+        <div class="brand-lockup">
+          <div class="brand-logo-card" aria-label="Logotipo GLF">
+            <img src="assets/glf-logo-horizontal-blanco.png" alt="Galápagos Life Fund" />
+          </div>
+          <div>
+            <p class="eyebrow">Galápagos Life Fund</p>
+            <h1>Sistema Prototipo de Adquisiciones</h1>
+          </div>
+        </div>
+        <form id="loginForm" class="login-form" autocomplete="off">
+          <label>
+            Usuario
+            <input id="username" autocomplete="off" placeholder="Ingrese su usuario" />
+          </label>
+          <label>
+            Contraseña
+            <input id="password" type="password" autocomplete="new-password" placeholder="Ingrese su contraseña" />
+          </label>
+          <button id="loginSubmitBtn" type="button">Ingresar al sistema</button>
+          <p id="loginError" class="form-error" hidden>Usuario o contraseña incorrectos.</p>
+        </form>
+      </section>
+    </div>
+
+    <div id="appShell" class="app-shell" hidden>
+      <aside class="sidebar">
+        <div class="brand-lockup compact">
+          <div class="brand-logo-card compact-logo">
+            <img src="assets/glf-logo-horizontal-blanco.png" alt="Galápagos Life Fund" />
+          </div>
+          <div>
+            <p class="eyebrow">GLF</p>
+            <h2>Adquisiciones</h2>
+          </div>
+        </div>
+        <nav class="nav" aria-label="Principal">
+          <button class="nav-link active" data-view="dashboard">Dashboard</button>
+          <button class="nav-link" data-view="registry">Registro maestro</button>
+          <button class="nav-link" data-view="expediente">Expediente</button>
+          <button class="nav-link" data-view="calendar">Calendario</button>
+          <button class="nav-link" data-view="drive">Drive y archivos</button>
+          <button class="nav-link" data-view="reports">Reportería</button>
+          <button class="nav-link" data-view="settings">Configuración</button>
+          <button id="openManualBtn" class="nav-link" type="button">Manual de uso</button>
+        </nav>
+        <div class="sidebar-footer">
+          <span id="driveStatusBadge" class="status-badge neutral">Drive no conectado</span>
+          <button id="logoutBtn" class="ghost-button">Cerrar sesión</button>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">GLF-GOB-001-2026</p>
+            <h1 id="viewTitle">Dashboard ejecutivo</h1>
+          </div>
+          <div class="top-actions">
+            <button id="newProcessBtn" class="secondary-button">Nuevo expediente</button>
+            <button id="downloadUpdatedExcelBtn" class="secondary-button">Descargar Excel actualizado</button>
+            <button id="exportDashboardPdfBtn" class="primary-button">Descargar PDF</button>
+          </div>
+        </header>
+
+        <section id="dashboardView" class="view active">
+          <div class="kpi-grid" id="kpiGrid"></div>
+          <div class="content-grid">
+            <article class="panel wide">
+              <div class="panel-header">
+                <h2>Portafolio por estado</h2>
+                <span class="soft-label">Monto y volumen</span>
+              </div>
+              <div id="stateChart" class="bar-list"></div>
+            </article>
+            <article class="panel">
+              <div class="panel-header">
+                <h2>Acciones requeridas</h2>
+                <span id="alertCount" class="pill info">0</span>
+              </div>
+              <div id="alertsList" class="stack-list"></div>
+            </article>
+          </div>
+          <article class="panel">
+            <div class="panel-header">
+              <h2>Procesos recientes</h2>
+              <span class="soft-label">Registro maestro</span>
+            </div>
+            <div class="table-wrap">
+              <table id="recentTable"></table>
+            </div>
+          </article>
+          <article class="panel">
+            <div class="panel-header wrap">
+              <div>
+                <h2>Avisos por vencimiento</h2>
+                <p>Procesos que vencen en 7 días o que ya vencieron sin archivos registrados.</p>
+              </div>
+              <div class="button-row">
+                <button id="sendDueEmailBtn" class="primary-button">Preparar correo de aviso</button>
+                <button id="downloadDueAlertsExcelBtn" class="secondary-button">Descargar avisos Excel</button>
+              </div>
+            </div>
+            <div id="dueAlertsList" class="stack-list"></div>
+          </article>
+        </section>
+
+        <section id="registryView" class="view">
+          <article class="panel">
+            <div class="panel-header wrap">
+              <div>
+                <h2>Registro maestro</h2>
+                <p>Consulta, filtros y edición ligera de procesos importados desde Excel.</p>
+              </div>
+              <div class="toolbar">
+                <input id="searchInput" class="search-input" placeholder="Buscar por código, proveedor u objeto..." />
+                <select id="institutionFilter"></select>
+                <select id="levelFilter"></select>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table id="registryTable"></table>
+            </div>
+          </article>
+        </section>
+
+        <section id="expedienteView" class="view">
+          <div class="expediente-layout">
+            <article class="panel">
+              <div class="panel-header">
+                <h2>Expediente seleccionado</h2>
+                <select id="contractSelect"></select>
+              </div>
+              <div id="contractDetail" class="detail-card"></div>
+            </article>
+            <article class="panel">
+              <div class="panel-header">
+                <h2>Checklist documental</h2>
+                <span id="checklistBadge" class="pill">Pendiente</span>
+              </div>
+              <div id="documentChecklist" class="checklist"></div>
+            </article>
+          </div>
+          <div class="content-grid">
+            <article class="panel">
+              <div class="panel-header"><h2>IDD / debida diligencia</h2></div>
+              <div id="iddPanel" class="stack-list"></div>
+            </article>
+            <article class="panel">
+              <div class="panel-header"><h2>Garantías</h2></div>
+              <div id="guaranteesPanel" class="stack-list"></div>
+            </article>
+          </div>
+          <article class="panel">
+            <div class="panel-header wrap">
+              <div>
+                <h2>Actualizar datos del expediente</h2>
+                <p>Modifica la información clave del proceso seleccionado. Los cambios quedan guardados localmente y salen en el Excel actualizado.</p>
+              </div>
+              <span class="soft-label">Alimentación local de datos</span>
+            </div>
+            <form id="editContractForm" class="form-grid">
+              <label class="span-2">Objeto del contrato <textarea name="object"></textarea></label>
+              <label>Proveedor / contratista <input name="provider" /></label>
+              <label>Monto USD <input name="amount" type="number" min="0" step="0.01" /></label>
+              <label>Estado <select name="status"></select></label>
+              <label>IDD aprobado <select name="idd"></select></label>
+              <label>No objeción Junta <select name="board"></select></label>
+              <label>Fecha inicio <input name="startDate" type="date" /></label>
+              <label>Fecha vencimiento <input name="endDate" type="date" /></label>
+              <label>Responsable técnico <input name="technicalLead" /></label>
+              <label>Nivel / ruta <select name="level"></select></label>
+              <label class="span-2">Observaciones legales <textarea name="legalNotes"></textarea></label>
+              <div class="button-row right span-2">
+                <button id="resetEditContractBtn" type="button" class="secondary-button">Restaurar formulario</button>
+                <button class="primary-button">Guardar cambios</button>
+              </div>
+            </form>
+          </article>
+        </section>
+
+        <section id="calendarView" class="view">
+          <div class="content-grid">
+            <article class="panel wide">
+              <div class="panel-header wrap">
+                <div>
+                  <h2>Calendario de hitos y vencimientos</h2>
+                  <p>Contratos, IDD, garantías y entregables próximos, calculados desde el registro maestro.</p>
+                </div>
+                <div class="toolbar">
+                  <input id="calendarMonth" type="month" />
+                  <select id="calendarTypeFilter">
+                    <option value="">Todos los eventos</option>
+                    <option value="Contrato">Contratos</option>
+                    <option value="IDD">IDD</option>
+                    <option value="Garantía">Garantías</option>
+                    <option value="Entregable">Entregables</option>
+                  </select>
+                </div>
+              </div>
+              <div id="calendarGrid" class="calendar-grid"></div>
+            </article>
+            <article class="panel">
+              <div class="panel-header">
+                <h2>Próximos eventos</h2>
+                <span id="upcomingCount" class="pill warning">0</span>
+              </div>
+              <div id="upcomingEvents" class="stack-list"></div>
+            </article>
+          </div>
+        </section>
+
+        <section id="driveView" class="view">
+          <div class="content-grid">
+            <article class="panel">
+              <div class="panel-header">
+                <h2>Google Drive API</h2>
+                <span id="googleAuthState" class="status-badge neutral">Pendiente</span>
+              </div>
+              <p>
+                Para subir archivos a Drive desde GitHub Pages se requiere un Client ID de Google Cloud. Mientras
+                tanto, la app puede guardar copias en una carpeta local sincronizada de Google Drive.
+              </p>
+              <label class="field">
+                Google OAuth Client ID
+                <input id="googleClientId" placeholder="Pega aquí el Client ID cuando lo tengas" />
+              </label>
+              <div class="button-row">
+                <button id="saveGoogleConfigBtn" class="secondary-button">Guardar configuración</button>
+                <button id="connectDriveBtn" class="primary-button">Conectar Drive</button>
+              </div>
+              <div class="drive-folder-tools">
+                <input id="driveFolderName" placeholder="Nombre de carpeta en Drive, ej. GLF-GOB-001-2026-N3-DPNG-01" />
+                <button id="createDriveFolderBtn" class="secondary-button">Crear carpeta Drive</button>
+              </div>
+              <div id="driveFolders" class="stack-list"></div>
+            </article>
+            <article class="panel">
+              <div class="panel-header">
+                <h2>Google Sheet / Excel como fuente</h2>
+                <span class="status-badge neutral">Preparado</span>
+              </div>
+              <p>
+                En este prototipo la alimentación de datos se guarda localmente y se exporta a Excel actualizado. Para
+                alimentar un Google Sheet real se requiere OAuth de Google Cloud o una integración posterior con Apps Script.
+              </p>
+              <div class="button-row">
+                <button id="goEditDataBtn" class="primary-button">Actualizar expediente seleccionado</button>
+                <button id="downloadUpdatedExcelBtnDrive" class="secondary-button">Descargar Excel actualizado</button>
+              </div>
+            </article>
+            <article class="panel">
+              <div class="panel-header">
+                <h2>Carpeta local Google Drive</h2>
+                <span id="localFolderState" class="status-badge neutral">Sin carpeta</span>
+              </div>
+              <p>
+                Si tienes Google Drive para escritorio, puedes elegir una carpeta local sincronizada. El navegador
+                pedirá permiso y guardará ahí archivos JSON/PDF/Excel o copias de documentos de prueba.
+              </p>
+              <div class="button-row">
+                <button id="chooseLocalFolderBtn" class="primary-button">Escoger carpeta local</button>
+                <button id="saveLocalSnapshotBtn" class="secondary-button">Guardar respaldo local</button>
+              </div>
+              <label class="field">
+                Subir archivo al expediente seleccionado
+                <input id="fileInput" type="file" multiple />
+              </label>
+              <button id="saveFilesLocalBtn" class="secondary-button">Copiar archivos a carpeta local</button>
+              <div id="fileLog" class="stack-list"></div>
+            </article>
+          </div>
+        </section>
+
+        <section id="reportsView" class="view">
+          <div class="content-grid">
+            <article class="panel">
+              <div class="panel-header"><h2>Reportes PDF</h2></div>
+              <p>Genera reportes listos para presentar sobre el portafolio o sobre un expediente específico.</p>
+              <div class="button-row">
+                <button id="downloadPortfolioPdfBtn" class="primary-button">Reporte portafolio PDF</button>
+                <button id="downloadContractPdfBtn" class="secondary-button">Expediente seleccionado PDF</button>
+              </div>
+            </article>
+          <article class="panel">
+            <div class="panel-header"><h2>Exportaciones Excel</h2></div>
+            <p>Descarga tablas base para análisis, auditoría o respaldo.</p>
+            <div class="button-row">
+                <button id="downloadRegistryXlsxBtn" class="primary-button">Excel actualizado completo</button>
+                <button id="downloadComplianceXlsxBtn" class="secondary-button">Matriz cumplimiento Excel</button>
+                <button id="downloadDueAlertsExcelBtnReports" class="secondary-button">Avisos vencimiento Excel</button>
+            </div>
+          </article>
+          </div>
+          <article class="panel">
+            <div class="panel-header"><h2>Matriz de cumplimiento</h2></div>
+            <div class="table-wrap">
+              <table id="complianceTable"></table>
+            </div>
+          </article>
+        </section>
+
+        <section id="settingsView" class="view">
+          <article class="panel">
+            <div class="panel-header">
+              <h2>Reglas incorporadas</h2>
+              <span class="soft-label">Basadas en política y guía práctica GLF</span>
+            </div>
+            <div class="rules-grid">
+              <div><strong>N1</strong><span>Menos de USD 2.000 · soporte mínimo</span></div>
+              <div><strong>N2</strong><span>USD 2.000 a 5.000 · 2 proformas</span></div>
+              <div><strong>N3</strong><span>USD 5.000 a 100.000 · 3 ofertas</span></div>
+              <div><strong>N4</strong><span>Más de USD 100.000 · licitación</span></div>
+              <div><strong>DIR</strong><span>Causal obligatoria; si > USD 20.000 requiere no objeción Junta</span></div>
+              <div><strong>IDD</strong><span>Vigencia 365 días; seguimiento si está pendiente, vencido o por vencer</span></div>
+            </div>
+          </article>
+          <article class="panel">
+            <div class="panel-header"><h2>Identidad visual</h2></div>
+            <p>
+              El prototipo usa el logotipo descargado desde el sitio oficial de GLF y la paleta detectada en su hoja
+              de estilos: azul #1E3A6C, cyan #00C1DE, verde #038C7C, blanco y negro institucional. Si luego se
+              entrega un manual de marca formal, se ajustarán proporciones, usos alternos y restricciones.
+            </p>
+          </article>
+          <article class="panel">
+            <div class="panel-header"><h2>Correo de avisos</h2></div>
+            <p>
+              Configura el destinatario que recibirá los avisos preparados por el prototipo. Para envío automático real
+              se deberá conectar una cuenta institucional mediante Microsoft 365, Google Workspace o un backend.
+            </p>
+            <label class="field">
+              Correo destinatario de avisos
+              <input id="alertsEmailInput" type="email" placeholder="ejemplo@galapagoslifefund.org.ec" />
+            </label>
+            <div class="button-row">
+              <button id="saveAlertsEmailBtn" class="secondary-button">Guardar correo</button>
+              <button id="sendDueEmailBtnSettings" class="primary-button">Preparar correo ahora</button>
+            </div>
+          </article>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="manualDialog" class="modal">
+      <form method="dialog">
+        <div class="panel-header">
+          <h2>Manual de uso rápido</h2>
+          <button type="button" class="icon-button" id="closeManualBtn">×</button>
+        </div>
+        <div class="manual-content">
+          <h3>1. Ingreso</h3>
+          <p>Ingrese con las credenciales autorizadas y acceda al dashboard ejecutivo.</p>
+          <h3>2. Registro maestro</h3>
+          <p>Use los filtros para buscar procesos por código, proveedor, institución o nivel de adquisición.</p>
+          <h3>3. Expediente</h3>
+          <p>Seleccione un expediente para revisar datos contractuales, checklist documental, IDD y garantías.</p>
+          <h3>4. Calendario</h3>
+          <p>Revise vencimientos de contratos, garantías, IDD y entregables.</p>
+          <h3>5. Drive y archivos</h3>
+          <p>Seleccione una carpeta local sincronizada con Google Drive para guardar respaldos o copiar archivos.</p>
+          <h3>6. Reportería y Excel</h3>
+          <p>Descargue PDF, Excel actualizado completo, matriz de cumplimiento y avisos por vencimiento.</p>
+          <h3>7. Avisos por correo</h3>
+          <p>El sistema identifica procesos por vencer o vencidos sin archivos y prepara un correo de aviso.</p>
+        </div>
+        <div class="button-row right">
+          <button class="primary-button">Cerrar</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="newProcessDialog" class="modal">
+      <form id="newProcessForm" method="dialog">
+        <div class="panel-header">
+          <h2>Nuevo expediente</h2>
+          <button type="button" class="icon-button" id="closeDialogBtn">×</button>
+        </div>
+        <div class="form-grid">
+          <label>Institución <select name="institution" required></select></label>
+          <label>Tipo <select name="type" required></select></label>
+          <label>Monto USD <input name="amount" type="number" min="0" step="0.01" required /></label>
+          <label>Modalidad <select name="mode"><option>Automática por monto</option><option>DIR</option><option>CONV</option></select></label>
+          <label>Fecha inicio <input name="startDate" type="date" /></label>
+          <label>Fecha vencimiento <input name="endDate" type="date" /></label>
+          <label class="span-2">Objeto <textarea name="object" required></textarea></label>
+          <label>Proveedor / contratista <input name="provider" /></label>
+          <label>Responsable técnico <input name="technicalLead" /></label>
+        </div>
+        <div class="button-row right">
+          <button type="button" id="cancelNewProcessBtn" class="secondary-button">Cancelar</button>
+          <button class="primary-button" value="default">Crear expediente</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="login-boot.js?v=20260713-9"></script>
+    <script src="data/seed-data.js?v=20260713-9"></script>
+    <script src="app.js?v=20260713-9"></script>
+  </body>
+</html>
